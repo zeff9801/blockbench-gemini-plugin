@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createTool } from "@/lib/factories";
 import { cubeSchema } from "@/lib/zodObjects";
 import { STATUS_STABLE } from "@/lib/constants";
+import { getProjectTexture } from "@/lib/util";
 
 export function registerCubesTools() {
 createTool(
@@ -55,7 +56,7 @@ createTool(
           "Faces to apply the texture to. Set to `true` to enable auto UV mapping."
         ),
     }),
-    async execute({ elements, texture, faces, group }, { reportProgress }) {
+    async execute({ elements, texture, faces, group }) {
       Undo.initEdit({
         elements: [],
         outliner: true,
@@ -64,7 +65,6 @@ createTool(
       const total = elements.length;
 
       const projectTexture = texture
-        // @ts-expect-error Blockbench global utility available at runtime
         ? getProjectTexture(texture)
         : Texture.getDefault();
 
@@ -108,11 +108,6 @@ createTool(
           );
           cube.mapAutoUV();
         }
-
-        reportProgress({
-          progress,
-          total,
-        });
 
         return cube;
       });

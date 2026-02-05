@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createTool } from "@/lib/factories";
 import { captureScreenshot, captureAppScreenshot } from "@/lib/util";
 import { STATUS_EXPERIMENTAL, STATUS_STABLE } from "@/lib/constants";
+import { vector3Schema, projectionEnum } from "@/lib/zodObjects";
 
 export function registerCameraTools() {
   createTool(
@@ -13,7 +14,6 @@ export function registerCameraTools() {
       annotations: {
         title: "Capture Screenshot",
         readOnlyHint: true,
-        destructiveHint: true,
       },
       parameters: z.object({
         project: z.string().optional().describe("Project name or UUID."),
@@ -50,36 +50,24 @@ export function registerCameraTools() {
         destructiveHint: true,
       },
       parameters: z.object({
-        angle: z.object({
-          position: z
-            .array(z.number())
-            .length(3)
-            .describe("Camera position."),
-          target: z
-            .array(z.number())
-            .length(3)
-            .optional()
-            .describe("Camera target position."),
-          rotation: z
-            .array(z.number())
-            .length(3)
-            .optional()
-            .describe("Camera rotation."),
-          projection: z
-            .enum(["unset", "orthographic", "perspective"])
-            .describe("Camera projection type."),
-        }),
+          position: vector3Schema.describe("Camera position."),
+          target: vector3Schema.optional().describe("Camera target position."),
+          rotation: vector3Schema.optional().describe("Camera rotation."),
+          projection: projectionEnum.describe("Camera projection type."),
       }),
-      async execute({ angle }) {
+      async execute(angle: { position: number[]; target?: number[]; rotation?: number[]; projection: string }) {
         const preview = Preview.selected;
 
         if (!preview) {
           throw new Error("No preview found in the Blockbench editor.");
         }
 
-        preview.loadAnglePreset(angle);
+        // @ts-expect-error Angle CAN be loaded like this
+        preview.loadAnglePreset({
+          ...angle
+        });
 
-        return await captureScreenshot();
+        return captureScreenshot();
       },
     },
     STATUS_EXPERIMENTAL

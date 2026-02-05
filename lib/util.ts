@@ -1,5 +1,3 @@
-import html2canvas from "html2canvas";
-
 /**
  * Helper function to create properly formatted image content for MCP responses.
  * Handles data URLs, base64 strings, and objects with url property.
@@ -90,6 +88,129 @@ export function getProjectTexture(id: string): Texture | null {
   return texture || null;
 }
 
+// ============================================================================
+// Lookup Helpers with Actionable Error Messages
+// ============================================================================
+
+/**
+ * Finds a group/bone by name and throws an actionable error if not found.
+ * @param name - The name of the group/bone to find
+ * @returns The found Group
+ * @throws Error with suggestion to use list_outline
+ */
+export function findGroupOrThrow(name: string): Group {
+  // @ts-ignore - Group is globally available in Blockbench
+  const group = Group.all.find((g: Group) => g.name === name);
+  if (!group) {
+    throw new Error(
+      `Bone/group "${name}" not found. Use the list_outline tool to see available groups and bones.`
+    );
+  }
+  return group;
+}
+
+/**
+ * Finds a mesh by ID or name and throws an actionable error if not found.
+ * @param id - The UUID or name of the mesh to find
+ * @returns The found Mesh
+ * @throws Error with suggestion to use list_outline
+ */
+export function findMeshOrThrow(id: string): Mesh {
+  // @ts-ignore - Mesh is globally available in Blockbench
+  const mesh = Mesh.all.find((m: Mesh) => m.uuid === id || m.name === id);
+  if (!mesh) {
+    throw new Error(
+      `Mesh "${id}" not found. Use the list_outline tool to see available meshes.`
+    );
+  }
+  return mesh;
+}
+
+/**
+ * Finds an element (cube, mesh, group) by ID or name and throws an actionable error if not found.
+ * @param id - The UUID or name of the element to find
+ * @returns The found OutlinerElement
+ * @throws Error with suggestion to use list_outline
+ */
+export function findElementOrThrow(id: string): OutlinerElement {
+  const element = Outliner.elements.find(
+    (el: OutlinerElement) => el.uuid === id || el.name === id
+  ) || Group.all.find((g: Group) => g.uuid === id || g.name === id);
+  if (!element) {
+    throw new Error(
+      `Element "${id}" not found. Use the list_outline tool to see available elements.`
+    );
+  }
+  return element;
+}
+
+/**
+ * Finds a texture by ID, name, or UUID and throws an actionable error if not found.
+ * @param id - The ID, name, or UUID of the texture to find
+ * @returns The found Texture
+ * @throws Error with suggestion to use list_textures
+ */
+export function findTextureOrThrow(id: string): Texture {
+  const texture = getProjectTexture(id);
+  if (!texture) {
+    throw new Error(
+      `Texture "${id}" not found. Use the list_textures tool to see available textures.`
+    );
+  }
+  return texture;
+}
+
+/**
+ * Helper to find a TextureGroup by name or UUID
+ */
+export function findTextureGroupOrThrow(id: string): TextureGroup {
+  // @ts-ignore - TextureGroup is globally available in Blockbench
+  const group = TextureGroup.all.find(
+    (g: TextureGroup) => g.uuid === id || g.name === id
+  );
+  if (!group) {
+    throw new Error(
+      `Material/texture group "${id}" not found. Use the list_materials tool to see available materials.`
+    );
+  }
+  return group;
+}
+
+/**
+ * Helper to get texture info for a PBR channel
+ */
+export function getChannelTextureInfo(textures: Texture[], channel: string) {
+  const tex = textures.find((t: Texture) => t.pbr_channel === channel);
+  return tex
+    ? { name: tex.name, uuid: tex.uuid, hasTexture: true }
+    : { hasTexture: false };
+}
+
+/**
+ * Gets a mesh by ID or returns the selected mesh if no ID provided.
+ * Throws an actionable error if no mesh is found.
+ * @param meshId - Optional mesh UUID or name
+ * @returns The found or selected Mesh
+ * @throws Error with suggestion to use list_outline
+ */
+export function getMeshOrSelected(meshId?: string): Mesh {
+  if (meshId) {
+    return findMeshOrThrow(meshId);
+  }
+  // @ts-ignore - Mesh is globally available in Blockbench
+  const selected = Mesh.selected[0];
+  if (!selected) {
+    throw new Error(
+      "No mesh selected and no mesh_id provided. Select a mesh or provide a mesh_id. Use the list_outline tool to see available meshes."
+    );
+  }
+  return selected;
+}
+
+/**
+ * Captures a screenshot of the 3D preview canvas.
+ * Uses Blockbench's native rendering pipeline for accurate capture.
+ */
 export function captureScreenshot(project?: string) {
   let selectedProject = Project;
 
@@ -103,86 +224,64 @@ export function captureScreenshot(project?: string) {
     throw new Error("No project found in the Blockbench editor.");
   }
 
-  if (selectedProject.select()) {
-    selectedProject.updateThumbnail();
+  // Select the project if needed
+  if (!selectedProject.selected) {
+    selectedProject.select();
   }
 
-  return imageContent(selectedProject.thumbnail, "image/png");
+  // @ts-ignore - Preview is globally available in Blockbench
+  const preview = Preview.selected;
+  if (!preview) {
+    throw new Error("No preview available for the selected project.");
+  }
+
+  // Capture the preview canvas using Blockbench's native approach
+  // Canvas.withoutGizmos temporarily hides gizmos, executes the callback, then restores them
+  let dataUrl: string | undefined;
+  // @ts-ignore - Canvas is globally available in Blockbench
+  Canvas.withoutGizmos(() => {
+    preview.render();
+    dataUrl = preview.canvas.toDataURL();
+  });
+
+  if (!dataUrl) {
+    throw new Error("Failed to capture preview screenshot.");
+  }
+
+  return imageContent(dataUrl, "image/png");
 }
 
 /**
- * Captures a screenshot of the Blockbench application window.
- * Tries Electron's native capture first (better quality, no CSS issues),
- * falls back to html2canvas if Electron capture is not available.
+ * Captures a screenshot of the entire Blockbench application window.
+ * Uses Electron's native capturePage API through Blockbench's Screencam.
+ * Only available when running as a desktop application.
  */
-export async function captureAppScreenshot() {
-  // Try Electron's native capture first (available in desktop app)
-  // This avoids html2canvas CSS parsing issues with modern color functions
-  if (typeof Blockbench !== 'undefined' && Blockbench.isApp) {
-    try {
-      // Access Electron's remote module or webContents
-      const electronModule = typeof require !== 'undefined' ? require('electron') : null;
-      if (electronModule?.remote?.getCurrentWindow) {
-        const win = electronModule.remote.getCurrentWindow();
-        const image = await win.webContents.capturePage();
-        const dataUrl = image.toDataURL();
-        return imageContent(dataUrl, "image/png");
-      }
-    } catch (electronError) {
-      console.warn("Electron capture not available, trying html2canvas:", electronError);
-    }
-  }
+export async function captureAppScreenshot(): Promise<ReturnType<typeof imageContent>> {
+  return new Promise((resolve, reject) => {
+    let resolved = false;
 
-  // Fallback to html2canvas with error handling for unsupported CSS
-  try {
-    const canvas = await html2canvas(document.documentElement, {
-      // Ignore CSS parsing errors for unsupported color functions
-      logging: false,
-      useCORS: true,
-      allowTaint: true,
-      // Use a custom onclone to strip problematic styles
-      onclone: (clonedDoc) => {
-        // Remove or replace problematic CSS that html2canvas can't handle
-        const styles = clonedDoc.querySelectorAll('style');
-        styles.forEach((style) => {
-          if (style.textContent) {
-            // Replace color() function with fallback colors
-            style.textContent = style.textContent.replace(
-              /color\([^)]+\)/g,
-              'currentColor'
-            );
-          }
-        });
-      },
+    // Add a timeout in case the callback is never called
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error("App screenshot timed out after 5 seconds."));
+      }
+    }, 5000);
+
+    // Use Blockbench's native Screencam.fullScreen which uses Electron's capturePage
+    // @ts-ignore - Screencam is globally available in Blockbench
+    Screencam.fullScreen({}, (dataUrl: string) => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeoutId);
+        if (dataUrl) {
+          resolve(imageContent(dataUrl, "image/png"));
+        } else {
+          reject(
+            new Error("Failed to capture app screenshot - no data returned.")
+          );
+        }
+      }
     });
-    const dataUrl = canvas.toDataURL();
-    return imageContent(dataUrl, "image/png");
-  } catch (html2canvasError) {
-    // If html2canvas still fails, try a more aggressive approach
-    console.warn("html2canvas failed, trying simplified capture:", html2canvasError);
-
-    try {
-      // Try capturing just the main preview canvas if available
-      const previewCanvas = document.querySelector('#preview canvas') as HTMLCanvasElement;
-      if (previewCanvas) {
-        const dataUrl = previewCanvas.toDataURL('image/png');
-        const imgResult = imageContent(dataUrl, "image/png");
-        return {
-          content: [
-            { type: "text" as const, text: "Note: Full app screenshot failed due to CSS compatibility. Returning preview canvas only." },
-            ...imgResult.content,
-          ],
-        };
-      }
-    } catch (canvasError) {
-      console.error("Canvas capture also failed:", canvasError);
-    }
-
-    // Return error with helpful message
-    throw new Error(
-      `Failed to capture app screenshot: ${html2canvasError}. ` +
-      "This may be due to modern CSS features not supported by html2canvas. " +
-      "Try using capture_screenshot instead for the 3D preview."
-    );
-  }
+  });
 }

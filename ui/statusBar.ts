@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sessionManager, type Session } from "@/lib/sessions";
+import statusBarCSS from "@/ui/statusBar.css";
 
 let statusBarElement: HTMLDivElement | undefined;
 let unsubscribe: (() => void) | undefined;
@@ -9,70 +10,7 @@ export function statusBarSetup(server: McpServer): void {
   const endpoint = Settings.get("mcp_endpoint") || "/bb-mcp";
 
   // Add CSS for the status bar
-  Blockbench.addCSS(/* css */ `
-    #mcp-status-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 12px;
-      background-color: var(--color-dark);
-      border-block-start: 1px solid var(--color-border);
-      font-size: 0.85em;
-      user-select: none;
-    }
-
-    #mcp-status-bar .mcp-status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      padding: 2px 8px;
-      border-radius: 4px;
-      transition: background-color 0.2s;
-    }
-
-    #mcp-status-bar .mcp-status-indicator:hover {
-      background-color: var(--color-button);
-    }
-
-    #mcp-status-bar .mcp-status-dot {
-      inline-size: 8px;
-      block-size: 8px;
-      border-radius: 50%;
-      background-color: var(--color-subtle_text);
-      transition: background-color 0.3s;
-    }
-
-    #mcp-status-bar .mcp-status-dot.connected {
-      background-color: #4caf50;
-      box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    #mcp-status-bar .mcp-status-dot.disconnected {
-      background-color: #f44336;
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
-      }
-    }
-
-    #mcp-status-bar .mcp-status-text {
-      color: var(--color-text);
-      font-weight: 500;
-    }
-
-    #mcp-status-bar .mcp-server-info {
-      color: var(--color-subtle_text);
-      font-size: 0.9em;
-      margin-inline-start: 4px;
-    }
-  `);
+  Blockbench.addCSS(statusBarCSS);
 
   // Create the status bar element
   statusBarElement = document.createElement("div");
@@ -81,14 +19,14 @@ export function statusBarSetup(server: McpServer): void {
   // Create the status indicator
   const statusIndicator = document.createElement("div");
   statusIndicator.className = "mcp-status-indicator";
-  statusIndicator.title = "Click to view MCP panel";
-  
+  statusIndicator.title = tl("mcp.tooltip.click_to_view_panel");
+
   const statusDot = document.createElement("div");
   statusDot.className = "mcp-status-dot";
-  
+
   const statusText = document.createElement("span");
   statusText.className = "mcp-status-text";
-  statusText.textContent = "MCP Server";
+  statusText.textContent = tl("mcp.status.server");
   
   const serverInfo = document.createElement("span");
   serverInfo.className = "mcp-server-info";
@@ -107,12 +45,12 @@ export function statusBarSetup(server: McpServer): void {
       statusDot.classList.remove("disconnected");
       statusDot.classList.add("connected");
       statusText.textContent = count === 1
-        ? "MCP Server (1 client)"
-        : `MCP Server (${count} clients)`;
+        ? tl("mcp.status.server_one_client")
+        : tl("mcp.status.server_clients", [count]);
     } else {
       statusDot.classList.remove("connected");
       statusDot.classList.add("disconnected");
-      statusText.textContent = "MCP Server";
+      statusText.textContent = tl("mcp.status.server");
     }
   };
 

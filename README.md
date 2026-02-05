@@ -6,12 +6,11 @@ https://github.com/user-attachments/assets/ab1b7e63-b6f0-4d5b-85ab-79d328de31db
 
 Open the desktop version of Blockbench, go to File > Plugins and click the "Load Plugin from URL" and paste in this URL:
 
-
-__[https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js](https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js)__
-
+**[https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js](https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js)**
 
 ## Model Context Protocol Server
-Configure the MCP server under Blockbench settings: __Settings__ > __General__ > __MCP Server Port__ and __MCP Server Endpoint__
+
+Configure the MCP server under Blockbench settings: **Settings** > **General** > **MCP Server Port** and **MCP Server Endpoint**
 
 The following examples use the default values of `:3000/bb-mcp`
 
@@ -19,32 +18,29 @@ The following examples use the default values of `:3000/bb-mcp`
 
 #### VS Code
 
-__`.vscode/mcp.json`__
+**`.vscode/mcp.json`**
 
 ```json
 {
-    "servers": {
-        "blockbench": {
-            "url": "http://localhost:3000/bb-mcp",
-            "type": "http"
-        },
+  "servers": {
+    "blockbench": {
+      "url": "http://localhost:3000/bb-mcp",
+      "type": "http"
     }
+  }
 }
 ```
 
 #### Claude Desktop
 
-__`claude_desktop_config.json`__
+**`claude_desktop_config.json`**
 
 ```json
 {
   "mcpServers": {
     "blockbench": {
       "command": "npx",
-      "args": [
-        "mcp-remote",
-        "http://localhost:3000/bb-mcp"
-      ]
+      "args": ["mcp-remote", "http://localhost:3000/bb-mcp"]
     }
   }
 }
@@ -56,11 +52,23 @@ __`claude_desktop_config.json`__
 claude mcp add blockbench --transport http http://localhost:3000/bb-mcp
 ```
 
+#### [Antigravity](https://antigravity.google/docs/mcp#connecting-custom-mcp-servers)
+
+```json
+{
+  "mcpServers": {
+    "blockbench": {
+      "serverUrl": "http://localhost:3000/bb-mcp"
+    }
+  }
+}
+```
+
 #### Gemini (Web / AI Studio)
 
 Use MCP SuperAssistant to connect Gemini to the Blockbench MCP server. Full setup steps are in `docs/gemini.md`.
 
-__`config.json`__
+**`config.json`**
 
 ```json
 {
@@ -74,9 +82,40 @@ __`config.json`__
 
 Start the proxy and connect the extension to `http://localhost:3006/sse`.
 
+#### Cline
+
+<img width="674" height="486" alt="Connecting to Blockbench MCP plugin through Cline" src="https://github.com/user-attachments/assets/f27f2304-dd56-4c60-b159-86fbd5af65ee" />
+
+**`cline_mcp_settings.json`**
+
+```json
+{
+  "mcpServers": {
+    "blockbench": {
+      "url": "http://localhost:3000/bb-mcp",
+      "type": "streamableHttp",
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+#### OpenCode
+
+```bash
+opencode mcp add
+```
+
+<img width="504" height="300" alt="Connecting to Blockbench MCP plugin through OpenCode." src="https://github.com/user-attachments/assets/238971fc-0048-4b8d-95dd-6681604bbe90" />
+
 ## Usage
 
 [See sample project](https://github.com/jasonjgardner/blockbench-mcp-project) for prompt examples.
+
+### [Skills](https://skills.sh/jasonjgardner/blockbench-mcp-project)
+
+Use Agent Skills to orchestrate tool usage.
 
 ## Plugin Development
 

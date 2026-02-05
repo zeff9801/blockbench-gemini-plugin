@@ -59,7 +59,15 @@ createTool(
 
       Undo.finishEdit("Agent triggered action");
 
-      return await captureAppScreenshot();
+      let result;
+      
+      try {
+        result = await captureAppScreenshot();
+      } catch (e) {
+        result = `Action "${action}" executed, but failed to capture app screenshot: ${e}`;
+      }
+
+      return result;
     },
   },
   STATUS_EXPERIMENTAL

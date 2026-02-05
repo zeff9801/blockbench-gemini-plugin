@@ -2,8 +2,18 @@
 /// <reference types="blockbench-types" />
 import { z } from "zod";
 import { createTool } from "@/lib/factories";
-import { meshSchema } from "@/lib/zodObjects";
+import {
+  meshSchema,
+  meshIdOptionalSchema,
+  meshIdSchema,
+  textureIdOptionalSchema,
+  groupIdOptionalSchema,
+  vector3Schema,
+  meshSelectionModeEnum,
+  selectionActionEnum,
+} from "@/lib/zodObjects";
 import { STATUS_EXPERIMENTAL, STATUS_STABLE } from "@/lib/constants";
+import { getProjectTexture, getMeshOrSelected, findMeshOrThrow } from "@/lib/util";
 
 export function registerMeshTools() {
 createTool(
@@ -17,19 +27,11 @@ createTool(
         },
         parameters: z.object({
             elements: z
-                .array(
-                    meshSchema
-                )
+                .array(meshSchema)
                 .min(1)
                 .describe("Array of meshes to place."),
-            texture: z
-                .string()
-                .optional()
-                .describe("Texture ID or name to apply to the mesh."),
-            group: z
-                .string()
-                .optional()
-                .describe("Group/bone to which the mesh belongs."),
+            texture: textureIdOptionalSchema.describe("Texture ID or name to apply to the mesh."),
+            group: groupIdOptionalSchema.describe("Group/bone to which the mesh belongs."),
         }),
         async execute({ elements, texture, group }, { reportProgress }) {
             Undo.initEdit({
@@ -40,7 +42,6 @@ createTool(
             const total = elements.length;
 
             const projectTexture = texture
-                // @ts-expect-error Blockbench global utility available at runtime
                 ? getProjectTexture(texture)
                 : Texture.getDefault();
 
@@ -97,12 +98,7 @@ createTool(
             destructiveHint: true,
         },
         parameters: z.object({
-            mesh_id: z
-                .string()
-                .optional()
-                .describe(
-                    "ID or name of the mesh. If not provided, uses selected mesh."
-                ),
+            mesh_id: meshIdOptionalSchema,
             distance: z.number().default(1).describe("Distance to extrude."),
             mode: z
                 .enum(["faces", "edges", "vertices"])
@@ -110,15 +106,7 @@ createTool(
                 .describe("What to extrude: faces, edges, or vertices."),
         }),
         async execute({ mesh_id, distance, mode }) {
-            const mesh = mesh_id
-                ? Mesh.all.find((m) => m.uuid === mesh_id || m.name === mesh_id)
-                : Mesh.selected[0];
-
-            if (!mesh) {
-                throw new Error(
-                    mesh_id ? `Mesh with ID "${mesh_id}" not found.` : "No mesh selected."
-                );
-            }
+            const mesh = getMeshOrSelected(mesh_id);
 
             // Use the extrude tool
             const tool =
@@ -150,12 +138,7 @@ createTool(
             destructiveHint: true,
         },
         parameters: z.object({
-            mesh_id: z
-                .string()
-                .optional()
-                .describe(
-                    "ID or name of the mesh. If not provided, uses selected mesh."
-                ),
+            mesh_id: meshIdOptionalSchema,
             cuts: z
                 .number()
                 .min(1)
@@ -164,15 +147,7 @@ createTool(
                 .describe("Number of subdivision cuts to make."),
         }),
         async execute({ mesh_id, cuts }) {
-            const mesh = mesh_id
-                ? Mesh.all.find((m) => m.uuid === mesh_id || m.name === mesh_id)
-                : Mesh.selected[0];
-
-            if (!mesh) {
-                throw new Error(
-                    mesh_id ? `Mesh with ID "${mesh_id}" not found.` : "No mesh selected."
-                );
-            }
+            const mesh = getMeshOrSelected(mesh_id);
 
             // Use the loop cut tool with subdivision
             const tool = BarItems.loop_cut;
@@ -204,9 +179,7 @@ createTool(
                 .array(
                     z.object({
                         name: z.string().describe("Name of the sphere."),
-                        position: z
-                            .array(z.number()).length(3)
-                            .describe("Position of the sphere center."),
+                        position: vector3Schema.describe("Position of the sphere center."),
                         diameter: z
                             .number()
                             .min(1)
@@ -221,8 +194,7 @@ createTool(
                             .describe(
                                 "Number of horizontal divisions (affects sphere quality)."
                             ),
-                        rotation: z
-                            .array(z.number()).length(3)
+                        rotation: vector3Schema
                             .optional()
                             .default([0, 0, 0])
                             .describe("Rotation of the sphere."),
@@ -235,14 +207,8 @@ createTool(
                 )
                 .min(1)
                 .describe("Array of spheres to create."),
-            texture: z
-                .string()
-                .optional()
-                .describe("Texture ID or name to apply to the sphere."),
-            group: z
-                .string()
-                .optional()
-                .describe("Group/bone to which the sphere belongs."),
+            texture: textureIdOptionalSchema.describe("Texture ID or name to apply to the sphere."),
+            group: groupIdOptionalSchema.describe("Group/bone to which the sphere belongs."),
         }),
         async execute({ elements, texture, group }, { reportProgress }) {
             Undo.initEdit({
@@ -253,7 +219,6 @@ createTool(
             const total = elements.length;
 
             const projectTexture = texture
-                // @ts-expect-error Blockbench global utility available at runtime
                 ? getProjectTexture(texture)
                 : Texture.getDefault();
 
@@ -391,10 +356,8 @@ createTool(
             destructiveHint: true,
         },
         parameters: z.object({
-            mesh_id: z
-                .string()
-                .describe("ID or name of the mesh to select elements from."),
-            mode: z.enum(["vertex", "edge", "face"]).describe("Selection mode."),
+            mesh_id: meshIdSchema.describe("ID or name of the mesh to select elements from."),
+            mode: meshSelectionModeEnum.describe("Selection mode."),
             elements: z
                 .array(
                     z.union([
@@ -406,20 +369,14 @@ createTool(
                 )
                 .optional()
                 .describe("Specific elements to select. If not provided, selects all."),
-            action: z
-                .enum(["select", "add", "remove", "toggle"])
+            action: selectionActionEnum
                 .default("select")
                 .describe(
                     "Selection action: select (replace), add, remove, or toggle."
                 ),
         }),
         async execute({ mesh_id, mode, elements, action }) {
-            const mesh = Mesh.all.find(
-                (m) => m.uuid === mesh_id || m.name === mesh_id
-            );
-            if (!mesh) {
-                throw new Error(`Mesh with ID "${mesh_id}" not found.`);
-            }
+            const mesh = findMeshOrThrow(mesh_id);
 
             Undo.initEdit({
                 elements: [mesh],
@@ -460,7 +417,6 @@ createTool(
                     const seen = new Set<string>();
                     for (const fkey in mesh.faces) {
                         const face = mesh.faces[fkey];
-                        // @ts-expect-error MeshFace#getEdges exists at runtime
                         const edges = (face.getEdges() as unknown as [string, string][]);
                         for (const [a, b] of edges) {
                             const key = a < b ? `${a}-${b}` : `${b}-${a}`;
@@ -577,15 +533,8 @@ createTool(
             destructiveHint: true,
         },
         parameters: z.object({
-            mesh_id: z
-                .string()
-                .optional()
-                .describe(
-                    "ID or name of the mesh. If not provided, uses selected mesh."
-                ),
-            offset: z
-                .array(z.number()).length(3)
-                .describe("Offset to move vertices by [x, y, z]."),
+            mesh_id: meshIdOptionalSchema,
+            offset: vector3Schema.describe("Offset to move vertices by [x, y, z]."),
             vertices: z
                 .array(z.string())
                 .optional()
@@ -594,15 +543,7 @@ createTool(
                 ),
         }),
         async execute({ mesh_id, offset, vertices }) {
-            const mesh = mesh_id
-                ? Mesh.all.find((m) => m.uuid === mesh_id || m.name === mesh_id)
-                : Mesh.selected[0];
-
-            if (!mesh) {
-                throw new Error(
-                    mesh_id ? `Mesh with ID "${mesh_id}" not found.` : "No mesh selected."
-                );
-            }
+            const mesh = getMeshOrSelected(mesh_id);
 
             Undo.initEdit({
                 elements: [mesh],
@@ -650,12 +591,7 @@ createTool(
             destructiveHint: true,
         },
         parameters: z.object({
-            mesh_id: z
-                .string()
-                .optional()
-                .describe(
-                    "ID or name of the mesh. If not provided, uses selected mesh."
-                ),
+            mesh_id: meshIdOptionalSchema,
             mode: z
                 .enum(["vertices", "edges", "faces"])
                 .default("faces")
@@ -666,15 +602,7 @@ createTool(
                 .describe("When deleting faces/edges, whether to keep the vertices."),
         }),
         async execute({ mesh_id, mode, keep_vertices }) {
-            const mesh = mesh_id
-                ? Mesh.all.find((m) => m.uuid === mesh_id || m.name === mesh_id)
-                : Mesh.selected[0];
-
-            if (!mesh) {
-                throw new Error(
-                    mesh_id ? `Mesh with ID "${mesh_id}" not found.` : "No mesh selected."
-                );
-            }
+            const mesh = getMeshOrSelected(mesh_id);
 
             // Use the delete tool
             const tool = BarItems.delete_mesh_selection;
@@ -701,7 +629,7 @@ createTool(
             destructiveHint: true,
         },
         parameters: z.object({
-            mesh_id: z.string().describe("ID or name of the mesh."),
+            mesh_id: meshIdSchema,
             threshold: z
                 .number()
                 .min(0)
@@ -714,12 +642,7 @@ createTool(
                 .describe("Whether to only merge selected vertices."),
         }),
         async execute({ mesh_id, threshold, selected_only }) {
-            const mesh = Mesh.all.find(
-                (m) => m.uuid === mesh_id || m.name === mesh_id
-            );
-            if (!mesh) {
-                throw new Error(`Mesh with ID "${mesh_id}" not found.`);
-            }
+            const mesh = findMeshOrThrow(mesh_id);
 
             Undo.initEdit({
                 elements: [mesh],
@@ -802,32 +725,16 @@ createTool(
             destructiveHint: true,
         },
         parameters: z.object({
-            mesh_id: z
-                .string()
-                .optional()
-                .describe(
-                    "ID or name of the mesh. If not provided, uses selected mesh."
-                ),
+            mesh_id: meshIdOptionalSchema,
             vertices: z
                 .array(z.string())
                 .min(3)
                 .max(4)
                 .describe("Vertex keys to create face from. Must be 3 or 4 vertices."),
-            texture: z
-                .string()
-                .optional()
-                .describe("Texture ID or name to apply to the new face."),
+            texture: textureIdOptionalSchema.describe("Texture ID or name to apply to the new face."),
         }),
         async execute({ mesh_id, vertices, texture }) {
-            const mesh = mesh_id
-                ? Mesh.all.find((m) => m.uuid === mesh_id || m.name === mesh_id)
-                : Mesh.selected[0];
-
-            if (!mesh) {
-                throw new Error(
-                    mesh_id ? `Mesh with ID "${mesh_id}" not found.` : "No mesh selected."
-                );
-            }
+            const mesh = getMeshOrSelected(mesh_id);
 
             Undo.initEdit({
                 elements: [mesh],
@@ -878,20 +785,17 @@ createTool(
                 .array(
                     z.object({
                         name: z.string(),
-                        position: z.array(z.number()).length(3),
+                        position: vector3Schema,
                         height: z.number().min(1).max(64).default(16),
                         diameter: z.number().min(1).max(64).default(16),
                         sides: z.number().min(3).max(64).default(12),
-                        rotation: z
-                            .array(z.number()).length(3)
-                            .optional()
-                            .default([0, 0, 0]),
+                        rotation: vector3Schema.optional().default([0, 0, 0]),
                         capped: z.boolean().optional().default(true),
                     })
                 )
                 .min(1),
-            texture: z.string().optional(),
-            group: z.string().optional(),
+            texture: textureIdOptionalSchema,
+            group: groupIdOptionalSchema,
         }),
         async execute({ elements, texture, group }, { reportProgress }) {
             Undo.initEdit({ elements: [], outliner: true, collections: [] });
@@ -985,14 +889,11 @@ createTool(
       destructiveHint: true,
     },
     parameters: z.object({
-      mesh_id: z.string().describe("ID or name of the mesh to cut."),
+      mesh_id: meshIdSchema.describe("ID or name of the mesh to cut."),
       points: z
         .array(
           z.object({
-            position: z
-              .array(z.number())
-              .length(3)
-              .describe("3D position of the cut point."),
+            position: vector3Schema.describe("3D position of the cut point."),
             face: z
               .string()
               .optional()
@@ -1003,12 +904,7 @@ createTool(
         .describe("Points defining the cut path."),
     }),
     async execute({ mesh_id, points }) {
-      const mesh = Mesh.all.find(
-        (m) => m.uuid === mesh_id || m.name === mesh_id
-      );
-      if (!mesh) {
-        throw new Error(`Mesh with ID "${mesh_id}" not found.`);
-      }
+      const mesh = findMeshOrThrow(mesh_id);
 
       Undo.initEdit({
         elements: [mesh],
