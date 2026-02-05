@@ -56,6 +56,24 @@ __`claude_desktop_config.json`__
 claude mcp add blockbench --transport http http://localhost:3000/bb-mcp
 ```
 
+#### Gemini (Web / AI Studio)
+
+Use MCP SuperAssistant to connect Gemini to the Blockbench MCP server. Full setup steps are in `docs/gemini.md`.
+
+__`config.json`__
+
+```json
+{
+  "mcpServers": {
+    "blockbench": {
+      "url": "http://localhost:3000/bb-mcp"
+    }
+  }
+}
+```
+
+Start the proxy and connect the extension to `http://localhost:3006/sse`.
+
 ## Usage
 
 [See sample project](https://github.com/jasonjgardner/blockbench-mcp-project) for prompt examples.
